@@ -34,10 +34,10 @@ fn main() {
         .map(|(i, x)| (i as f64, (x.re * x.re + x.im * x.im).sqrt() / 1_000.0))
         .collect();
 
-    plot(sequence);
+    plot(input_sequence, sequence);
 }
 
-fn plot(sequence: Vec<(f64, f64)>) {
+fn plot(sequence1: Vec<(f64, f64)>, sequence2: Vec<(f64, f64)>) {
     let root = BitMapBackend::new("out.png", (640, 480)).into_drawing_area();
 
     root.fill(&WHITE).unwrap();
@@ -46,16 +46,21 @@ fn plot(sequence: Vec<(f64, f64)>) {
         .margin(5)
         .x_label_area_size(30)
         .y_label_area_size(30)
-        .build_ranged(0.0..100.0, -2.0..2.0).unwrap();
+        .build_ranged(0.0..1_000.0, -2.0..2.0).unwrap();
 
     chart.configure_mesh().draw().unwrap();
 
     chart
         .draw_series(LineSeries::new(
-            sequence,
+            sequence1,
             &RED,
-        )).unwrap()
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
+        )).unwrap();
+
+    chart
+        .draw_series(LineSeries::new(
+            sequence2,
+            &GREEN,
+        )).unwrap();
 
     chart
         .configure_series_labels()
