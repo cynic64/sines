@@ -6,12 +6,18 @@ use rustfft::num_traits::Zero;
 
 fn main() {
     let mut input: Vec<Complex<f64>> = (0..1_000)
-        .map(|x| x as f64 / 100.0)
-        .map(|x| (x * std::f64::consts::PI).sin())
+        .map(|x| x as f64 / 10.0)
+        .map(|x| (x * std::f64::consts::PI).sin() + (x * 0.5 * std::f64::consts::PI).sin())
         .map(|x| Complex {
             im: 0.0,
             re: x
         })
+        .collect();
+
+    let input_sequence: Vec<_> = input
+        .iter()
+        .enumerate()
+        .map(|(i, x)| (i as f64, x.re))
         .collect();
 
     let mut output: Vec<Complex<f64>> = vec![Complex::zero(); 1_000];
@@ -20,10 +26,12 @@ fn main() {
     let fft = planner.plan_fft(1_000);
     fft.process(&mut input, &mut output);
 
+    dbg![&output];
+
     let sequence: Vec<_> = output
         .iter()
         .enumerate()
-        .map(|(i, x)| (i as f64, x.re))
+        .map(|(i, x)| (i as f64, (x.re * x.re + x.im * x.im).sqrt() / 1_000.0))
         .collect();
 
     plot(sequence);
@@ -38,7 +46,7 @@ fn plot(sequence: Vec<(f64, f64)>) {
         .margin(5)
         .x_label_area_size(30)
         .y_label_area_size(30)
-        .build_ranged(0.0..10.0, -1.0..1.0).unwrap();
+        .build_ranged(0.0..100.0, -2.0..2.0).unwrap();
 
     chart.configure_mesh().draw().unwrap();
 
