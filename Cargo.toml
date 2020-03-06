@@ -1,0 +1,11 @@
+[package]
+name = "sines"
+version = "0.1.0"
+authors = ["nicholas_schweitzer"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rustfft = "3.0.1"
+plotters = "0.2.12"
