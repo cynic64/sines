@@ -2,28 +2,31 @@ use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
 use rustfft::FFTplanner;
 
-use rand::Rng;
-
 use minifb::{Key, Window, WindowOptions};
 
 const WIDTH: usize = 100;
 const HEIGHT: usize = 100;
 const SCALE: usize = 10;
 
-const LENGTH: usize = 1_000;
+const PI2: f64 = std::f64::consts::PI * 2.0;
 
 fn main() {
-    // let mut rng = rand::thread_rng();
-
-    let mut input_1d = [0.0; WIDTH];
-    (0..WIDTH)
-        .for_each(|x| input_1d[x] = (x as f64 / WIDTH as f64 * 10.0 * std::f64::consts::PI).cos() + (x as f64 / WIDTH as f64 * 30.0 * std::f64::consts::PI).cos() * 0.5);
-
-    let output_1d = fourier(input_1d.to_vec());
-
     let mut input_2d = [[0.0; WIDTH]; HEIGHT];
-    (0..HEIGHT).for_each(|y| (0..WIDTH).for_each(|x| input_2d[y][x] = input_1d[x]));
+    let u = 1.0;
+    let v = 2.0;
+    let freq = 10.0;
+    (0..HEIGHT).for_each(|wx| {
+        (0..WIDTH).for_each(|wy| {
+            let x = wx as f64 / WIDTH as f64;
+            let y = wy as f64 / WIDTH as f64;
 
+            let n = ((u * (x * freq) + v * (y * freq)) * PI2).cos()
+                + ((u * (x * freq) + v * (y * freq)) * PI2).sin();
+            input_2d[wy][wx] = n;
+        })
+    });
+
+    /*
     let mut output_2d = [[0.0; WIDTH]; HEIGHT];
     (0..HEIGHT).for_each(|y| {
         (0..WIDTH).for_each(|x| {
@@ -32,50 +35,10 @@ fn main() {
             output_2d[y][x] = r * r + i * i;
         })
     });
+    */
 
     display_fb(&input_2d);
-    display_fb(&output_2d);
-}
-
-#[allow(dead_code)]
-fn reconstruct(transform: Vec<Complex<f64>>) -> Vec<(f64, f64)> {
-    let threshold = 0.0;
-    let half_len = transform.len() / 2;
-
-    // (frequency, fourier point)
-    let significant_freqs: Vec<(usize, Complex<f64>)> = (0..half_len)
-        .filter_map(|idx| {
-            let x = transform[idx];
-
-            if (x.re * x.re + x.im * x.im).sqrt() > threshold {
-                Some((idx, x))
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    let base_level =
-        (transform[0].re * transform[0].re + transform[1].im * transform[1].im).sqrt() * 0.5;
-
-    let mut reconstruction = vec![-base_level; LENGTH];
-
-    significant_freqs.iter().for_each(|(freq_idx, x)| {
-        // x is the complex result of the fourier transform
-        let amplitude = (x.re * x.re + x.im * x.im).sqrt();
-        let phase = x.im.atan2(x.re);
-        let period = (half_len as f64) / (*freq_idx as f64);
-
-        reconstruction.iter_mut().enumerate().for_each(|(x, y)| {
-            *y += (x as f64 / period * std::f64::consts::PI + phase).cos() * amplitude
-        });
-    });
-
-    reconstruction
-        .iter()
-        .enumerate()
-        .map(|(x, y)| (x as f64, *y))
-        .collect()
+    // display_fb(&output_2d);
 }
 
 fn normalize(transform: &mut [Complex<f64>]) {
