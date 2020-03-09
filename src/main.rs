@@ -4,7 +4,7 @@ use rustfft::FFTplanner;
 
 use minifb::{Key, Window, WindowOptions};
 
-use rand::{Rng, thread_rng};
+use rand::{thread_rng, Rng};
 
 const WIDTH: usize = 100;
 const HEIGHT: usize = 100;
@@ -16,22 +16,31 @@ fn main() {
     let mut rng = thread_rng();
 
     let mut input_2d = [[0.0; WIDTH]; HEIGHT];
-    let u = 1.0;
-    let v = 1.0;
-    let freq = 50.0;
+    let u = 2.0;
+    let v = 8.0;
+    let u2 = 3.0;
+    let v2 = -7.0;
+    let u3 = -4.0;
+    let v3 = 6.0;
+    let u4 = -5.0;
+    let v4 = -5.0;
     (0..HEIGHT).for_each(|wx| {
         (0..WIDTH).for_each(|wy| {
-            /*
             let x = wx as f64 / WIDTH as f64;
             let y = wy as f64 / WIDTH as f64;
 
-            let n = ((u * (x * freq) + v * (y * freq)) * PI2).cos()
-                + ((u * (x * freq) + v * (y * freq)) * PI2).sin();
+            let n = ((u * x + v * y) * PI2).cos() + ((u * x + v * y) * PI2).sin();
 
-            // let n = rng.gen();
-            input_2d[wy][wx] = n;
-             */
+            let n2 = ((u2 * x + v2 * y) * PI2).cos() + ((u2 * x + v2 * y) * PI2).sin();
 
+            let n3 = ((u3 * x + v3 * y) * PI2).cos() + ((u3 * x + v3 * y) * PI2).sin();
+
+            let n4 = ((u4 * x + v4 * y) * PI2).cos() + ((u4 * x + v4 * y) * PI2).sin();
+
+            let n5: f64 = rng.gen();
+            input_2d[wy][wx] = n + n2 + n3 + n4 + n5;
+
+            /*
             let x = wx as f64 / WIDTH as f64;
             let y = wy as f64 / WIDTH as f64;
             let d = ((x - 0.5) * (x - 0.5) + (y - 0.5) * (y - 0.5)).sqrt();
@@ -41,22 +50,88 @@ fn main() {
             } else {
                 input_2d[wy][wx] = 0.0;
             }
+            */
         })
     });
 
     let output_2d = fourier_2d(&input_2d);
 
+    let reconstructed = reconstruct_2d(&output_2d);
+
+    check(&input_2d, &reconstructed);
+
     display_fb(&input_2d);
-    display_fb(&output_2d);
+
+    let displayable_output = &powerify(&output_2d);
+    display_fb(&displayable_output);
+
+    display_fb(&reconstructed);
 }
 
 fn normalize(transform: &mut [Complex<f64>]) {
-    let div = (transform.len() / 2) as f64;
+    let div = transform.len() as f64;
 
     transform.iter_mut().for_each(|x| {
         x.re /= div;
         x.im /= div;
     });
+}
+
+fn reconstruct_2d(input: &[[Complex<f64>; WIDTH]; HEIGHT]) -> [[f64; WIDTH]; HEIGHT] {
+    let threshold = 0.1;
+
+    let half_width = WIDTH / 2;
+    let half_height = HEIGHT / 2;
+
+    let mut output_2d = [[0.0; WIDTH]; HEIGHT];
+
+    (0..HEIGHT).for_each(|y| {
+        (0..WIDTH).for_each(|x| {
+            let point = input[y][x];
+            let amplitude = (point.re * point.re + point.im * point.im).sqrt();
+            let phase = point.im.atan2(point.re);
+
+            // idk why
+            /*
+            let flip = if phase <= 0.0 {
+                1.0
+            } else {
+                -1.0
+            };
+            */
+
+            // idk why it has to be flipped here
+            let u = un_negate(y, WIDTH) as f64;
+            let v = un_negate(x, HEIGHT) as f64;
+
+            if amplitude > threshold {
+                println!(
+                    "Significant frequency at x: {}, y: {}, amplitude: {}, phase: {}, u: {}, v: {}",
+                    x,
+                    y,
+                    amplitude,
+                    phase,
+                    u,
+                    v,
+                );
+            }
+
+            output_2d.iter_mut().enumerate().for_each(|(wy, row)| {
+                row.iter_mut().enumerate().for_each(|(wx, val)| {
+                    let x = wx as f64 / WIDTH as f64;
+                    let y = wy as f64 / WIDTH as f64;
+
+                    /*
+                    *val += (((u * x + v * y) * PI2).cos() + ((u * x + v * y) * PI2).sin())
+                        * amplitude;
+                     */
+                    *val += ((u * x + v * y) * PI2 + phase).cos() * amplitude;
+                })
+            });
+        })
+    });
+
+    output_2d
 }
 
 fn fourier(input: &[Complex<f64>]) -> Vec<Complex<f64>> {
@@ -75,18 +150,10 @@ fn fourier(input: &[Complex<f64>]) -> Vec<Complex<f64>> {
 
     normalize(&mut output);
 
-    let half_len = output.len() / 2;
-
-    (0..input.len())
-        .map(|idx| if idx < half_len {
-            output[half_len - idx - 1]
-        } else {
-            output[idx - half_len]
-        })
-        .collect()
+    output
 }
 
-fn fourier_2d(input: &[[f64; WIDTH]; HEIGHT]) -> [[f64; WIDTH]; HEIGHT] {
+fn fourier_2d(input: &[[f64; WIDTH]; HEIGHT]) -> [[Complex<f64>; WIDTH]; HEIGHT] {
     // convert everything to complex numbers
     let complex_input: Vec<Vec<Complex<f64>>> = input
         .iter()
@@ -109,7 +176,7 @@ fn fourier_2d(input: &[[f64; WIDTH]; HEIGHT]) -> [[f64; WIDTH]; HEIGHT] {
             .for_each(|(x, &point)| fourier_columns[x][y] = point);
     });
 
-    let mut output_2d = [[0.0; WIDTH]; HEIGHT];
+    let mut output_2d = [[Complex::zero(); WIDTH]; HEIGHT];
 
     fourier_columns.iter().enumerate().for_each(|(y, column)| {
         let column_output = fourier(column);
@@ -117,7 +184,7 @@ fn fourier_2d(input: &[[f64; WIDTH]; HEIGHT]) -> [[f64; WIDTH]; HEIGHT] {
         column_output
             .iter()
             .enumerate()
-            .for_each(|(x, &point)| output_2d[y][x] = point.re * point.re + point.im * point.im);
+            .for_each(|(x, &point)| output_2d[y][x] = point);
     });
 
     output_2d
@@ -135,7 +202,8 @@ fn ghex(v: u32) -> u32 {
 }
 
 fn f64_to_hex(x: f64) -> u32 {
-    let contrast_factor = 10_000.0;
+    // let contrast_factor = 10_000.0;
+    let contrast_factor = 10.0;
 
     let x = 1.0 / (1.0 + std::f64::consts::E.powf(-(x * contrast_factor)));
 
@@ -170,6 +238,7 @@ fn display_fb(data: &[[f64; WIDTH]; HEIGHT]) {
         for (idx, val) in buffer.iter_mut().enumerate() {
             let x = idx % (WIDTH * SCALE) / SCALE;
             let y = idx / (WIDTH * SCALE) / SCALE;
+
             *val = f64_to_hex(data[y][x]);
         }
 
@@ -178,4 +247,60 @@ fn display_fb(data: &[[f64; WIDTH]; HEIGHT]) {
             .update_with_buffer(&buffer, WIDTH * SCALE, HEIGHT * SCALE)
             .unwrap();
     }
+}
+
+fn powerify(data: &[[Complex<f64>; WIDTH]; HEIGHT]) -> [[f64; WIDTH]; HEIGHT] {
+    let mut output = [[0.0; WIDTH]; HEIGHT];
+
+    data.iter().enumerate().for_each(|(y, row)| {
+        row.iter()
+            .enumerate()
+            .for_each(|(x, point)| output[y][x] = point.re * point.re + point.im * point.im)
+    });
+
+    output
+}
+
+fn flip(x: usize, size: usize) -> usize {
+    if x < size / 2 {
+        size / 2 - x - 1
+    } else {
+        size - x + size / 2 - 1
+    }
+}
+
+fn un_negate(x: usize, size: usize) -> f64 {
+    if x < size / 2 {
+        x as f64
+    } else {
+        -((size - x) as f64)
+    }
+}
+
+fn check(a: &[[f64; WIDTH]; HEIGHT], b: &[[f64; WIDTH]; HEIGHT]) {
+    let threshold = 0.0001;
+
+    a
+        .iter()
+        .enumerate()
+        .for_each(|(y, row)| row.iter()
+                  .enumerate()
+                  .for_each(|(x, val)| if (val - b[y][x]).abs() > threshold {
+                      println!("diff: {}", (val - b[y][x]).abs());
+                  }))
+}
+
+// flips DC to center and nyquist to border
+fn fold(input: &[[f64; WIDTH]; HEIGHT]) -> [[f64; WIDTH]; HEIGHT] {
+    let mut output = [[0.0; WIDTH]; HEIGHT];
+
+    input
+        .iter()
+        .enumerate()
+        .for_each(|(y, row)| row
+                  .iter()
+                  .enumerate()
+                  .for_each(|(x, val)| output[flip(y, HEIGHT)][flip(x, WIDTH)] = *val));
+
+    output
 }
