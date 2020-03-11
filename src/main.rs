@@ -4,18 +4,16 @@ use rustfft::FFTplanner;
 
 use minifb::{Key, Window, WindowOptions};
 
-use rand::{thread_rng, Rng};
+use image::{GenericImageView};
 
-use image::{DynamicImage, GenericImage, GenericImageView};
-
-const WIDTH: usize = 200;
-const HEIGHT: usize = 200;
+const WIDTH: usize = 100;
+const HEIGHT: usize = 100;
 const SCALE: usize = 5;
 
 const PI2: f64 = std::f64::consts::PI * 2.0;
 
 fn main() {
-    let img = image::open("cipi-200x200.png").expect("Couldn't open image");
+    let img = image::open("cipi-100x100.png").expect("Couldn't open image");
 
     println!("dimensions {:?}", img.dimensions());
 
@@ -38,7 +36,6 @@ fn main() {
     let reconstructed = reconstruct_2d(&output_2d);
     println!("reconstruct: {} ms", get_elapsed(st) * 1_000.0);
 
-    /*
     check(&input_2d, &reconstructed);
 
     display_fb(&input_2d);
@@ -47,7 +44,6 @@ fn main() {
     display_fb(&displayable_output);
 
     display_fb(&reconstructed);
-    */
 }
 
 fn normalize(transform: &mut [Complex<f64>]) {
