@@ -6,58 +6,39 @@ use minifb::{Key, Window, WindowOptions};
 
 use rand::{thread_rng, Rng};
 
-const WIDTH: usize = 100;
-const HEIGHT: usize = 100;
-const SCALE: usize = 10;
+use image::{DynamicImage, GenericImage, GenericImageView};
+
+const WIDTH: usize = 200;
+const HEIGHT: usize = 200;
+const SCALE: usize = 5;
 
 const PI2: f64 = std::f64::consts::PI * 2.0;
 
 fn main() {
-    let mut rng = thread_rng();
+    let img = image::open("cipi-200x200.png").expect("Couldn't open image");
+
+    println!("dimensions {:?}", img.dimensions());
 
     let mut input_2d = [[0.0; WIDTH]; HEIGHT];
-    let u = 2.0;
-    let v = 8.0;
-    let u2 = 3.0;
-    let v2 = -7.0;
-    let u3 = -4.0;
-    let v3 = 6.0;
-    let u4 = -5.0;
-    let v4 = -5.0;
-    (0..HEIGHT).for_each(|wx| {
-        (0..WIDTH).for_each(|wy| {
-            let x = wx as f64 / WIDTH as f64;
-            let y = wy as f64 / WIDTH as f64;
 
-            let n = ((u * x + v * y) * PI2).cos() + ((u * x + v * y) * PI2).sin();
-
-            let n2 = ((u2 * x + v2 * y) * PI2).cos() + ((u2 * x + v2 * y) * PI2).sin();
-
-            let n3 = ((u3 * x + v3 * y) * PI2).cos() + ((u3 * x + v3 * y) * PI2).sin();
-
-            let n4 = ((u4 * x + v4 * y) * PI2).cos() + ((u4 * x + v4 * y) * PI2).sin();
-
-            let n5: f64 = rng.gen();
-            input_2d[wy][wx] = n + n2 + n3 + n4 + n5;
-
-            /*
-            let x = wx as f64 / WIDTH as f64;
-            let y = wy as f64 / WIDTH as f64;
-            let d = ((x - 0.5) * (x - 0.5) + (y - 0.5) * (y - 0.5)).sqrt();
-
-            if d < 0.1 {
-                input_2d[wy][wx] = 1.0;
-            } else {
-                input_2d[wy][wx] = 0.0;
-            }
-            */
+    let st = std::time::Instant::now();
+    (0..HEIGHT).for_each(|y| {
+        (0..WIDTH).for_each(|x| {
+            let pixel = img.get_pixel(x as u32, y as u32);
+            input_2d[y][x] = (pixel[0] as u32 + pixel[1] as u32 + pixel[2] as u32) as f64 / 3.0 / 128.0 - 1.0;
         })
     });
+    println!("set input: {} ms", get_elapsed(st) * 1_000.0);
 
+    let st = std::time::Instant::now();
     let output_2d = fourier_2d(&input_2d);
+    println!("get fourier: {} ms", get_elapsed(st) * 1_000.0);
 
+    let st = std::time::Instant::now();
     let reconstructed = reconstruct_2d(&output_2d);
+    println!("reconstruct: {} ms", get_elapsed(st) * 1_000.0);
 
+    /*
     check(&input_2d, &reconstructed);
 
     display_fb(&input_2d);
@@ -66,6 +47,7 @@ fn main() {
     display_fb(&displayable_output);
 
     display_fb(&reconstructed);
+    */
 }
 
 fn normalize(transform: &mut [Complex<f64>]) {
@@ -79,9 +61,6 @@ fn normalize(transform: &mut [Complex<f64>]) {
 
 fn reconstruct_2d(input: &[[Complex<f64>; WIDTH]; HEIGHT]) -> [[f64; WIDTH]; HEIGHT] {
     let threshold = 0.1;
-
-    let half_width = WIDTH / 2;
-    let half_height = HEIGHT / 2;
 
     let mut output_2d = [[0.0; WIDTH]; HEIGHT];
 
@@ -105,15 +84,12 @@ fn reconstruct_2d(input: &[[Complex<f64>; WIDTH]; HEIGHT]) -> [[f64; WIDTH]; HEI
             let v = un_negate(x, HEIGHT) as f64;
 
             if amplitude > threshold {
+                /*
                 println!(
                     "Significant frequency at x: {}, y: {}, amplitude: {}, phase: {}, u: {}, v: {}",
-                    x,
-                    y,
-                    amplitude,
-                    phase,
-                    u,
-                    v,
+                    x, y, amplitude, phase, u, v,
                 );
+                */
             }
 
             output_2d.iter_mut().enumerate().for_each(|(wy, row)| {
@@ -122,8 +98,8 @@ fn reconstruct_2d(input: &[[Complex<f64>; WIDTH]; HEIGHT]) -> [[f64; WIDTH]; HEI
                     let y = wy as f64 / WIDTH as f64;
 
                     /*
-                    *val += (((u * x + v * y) * PI2).cos() + ((u * x + v * y) * PI2).sin())
-                        * amplitude;
+                     *val += (((u * x + v * y) * PI2).cos() + ((u * x + v * y) * PI2).sin())
+                     * amplitude;
                      */
                     *val += ((u * x + v * y) * PI2 + phase).cos() * amplitude;
                 })
@@ -280,27 +256,28 @@ fn un_negate(x: usize, size: usize) -> f64 {
 fn check(a: &[[f64; WIDTH]; HEIGHT], b: &[[f64; WIDTH]; HEIGHT]) {
     let threshold = 0.0001;
 
-    a
-        .iter()
-        .enumerate()
-        .for_each(|(y, row)| row.iter()
-                  .enumerate()
-                  .for_each(|(x, val)| if (val - b[y][x]).abs() > threshold {
-                      println!("diff: {}", (val - b[y][x]).abs());
-                  }))
+    a.iter().enumerate().for_each(|(y, row)| {
+        row.iter().enumerate().for_each(|(x, val)| {
+            if (val - b[y][x]).abs() > threshold {
+                println!("diff: {}", (val - b[y][x]).abs());
+            }
+        })
+    })
 }
 
 // flips DC to center and nyquist to border
 fn fold(input: &[[f64; WIDTH]; HEIGHT]) -> [[f64; WIDTH]; HEIGHT] {
     let mut output = [[0.0; WIDTH]; HEIGHT];
 
-    input
-        .iter()
-        .enumerate()
-        .for_each(|(y, row)| row
-                  .iter()
-                  .enumerate()
-                  .for_each(|(x, val)| output[flip(y, HEIGHT)][flip(x, WIDTH)] = *val));
+    input.iter().enumerate().for_each(|(y, row)| {
+        row.iter()
+            .enumerate()
+            .for_each(|(x, val)| output[flip(y, HEIGHT)][flip(x, WIDTH)] = *val)
+    });
 
     output
+}
+
+pub fn get_elapsed(start: std::time::Instant) -> f64 {
+    start.elapsed().as_secs() as f64 + start.elapsed().subsec_nanos() as f64 / 1_000_000_000.0
 }

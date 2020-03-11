@@ -11,3 +11,7 @@ rustfft = "3.0.1"
 plotters = "0.2.12"
 rand = "0.6"
 minifb = "0.15"
+image = "0.23"
+
+[profile.release]
+debug = true
